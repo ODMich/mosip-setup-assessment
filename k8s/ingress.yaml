@@ -3,33 +3,22 @@ kind: Ingress
 metadata:
   name: mosip-ingress
   namespace: mosip
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      - path: /idauthentication(/|$)(.*)
+      - path: /idauthentication
         pathType: Prefix
         backend:
           service:
             name: id-authentication-service
             port:
               number: 80
-      - path: /registration(/|$)(.*)
+      - path: /registration
         pathType: Prefix
         backend:
           service:
             name: registration-service
-            port:
-              number: 80
-      - path: /actuator(/|$)(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: id-authentication-service
             port:
               number: 80
