@@ -11,13 +11,19 @@ command -v kubectl >/dev/null 2>&1 || { echo "Kubectl required but not installed
 # Start Minikube with sufficient resources
 if ! minikube status | grep -q "Running"; then
     echo "Starting Minikube cluster..."
-    minikube start --addons=ingress --cpus=4 --memory=5000mb --disk-size=2g
+    minikube start --addons=ingress --cpus=4 --memory=5000 --disk-size=2g
 else
     echo "Minikube is already running"
 fi
 
 # Enable ingress if not already enabled
 minikube addons enable ingress
+
+echo "⏳ Waiting for NGINX Ingress Controller to be ready..."
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=120s
 
 echo "Creating MOSIP namespace..."
 kubectl apply -f k8s/namespace.yaml
