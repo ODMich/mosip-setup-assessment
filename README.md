@@ -1,27 +1,31 @@
-# MOSIP DevOps Setup
+## 🏗️ Containerization Strategy
 
-Complete enterprise-grade DevOps setup for deploying MOSIP ID Authentication and Registration modules in Kubernetes.
+### Official MOSIP Images
+This deployment uses official MOSIP Docker images from Docker Hub:
 
-## 🎯 Features
+- **ID Authentication**: `mosipid/mosip-id-authentication-service:1.2.4`
+- **Registration**: `mosipid/mosip-registration-service:1.2.4`
 
-- **Infrastructure & Deployment**: Containerized MOSIP services on Kubernetes with Ingress
-- **CI/CD Pipeline**: GitHub Actions with automated testing, security scanning, and deployment
-- **Monitoring & Logging**: Prometheus metrics collection and Grafana dashboards
-- **Security & Resilience**: Kubernetes Secrets, health checks, auto-recovery, rollback strategy
-- **Database & Dependencies**: PostgreSQL and Redis with proper configuration
+### Why No Custom Dockerfiles?
+- MOSIP provides production-ready, secure containers
+- Regular security updates and patches
+- Standardized Spring Boot containerization
+- No need for custom builds or maintenance
 
-## 🚀 Quick Start
+### Configuration Management
+Instead of custom Docker images, we use:
+- **Kubernetes ConfigMaps** for application configuration
+- **Kubernetes Secrets** for sensitive data
+- **Environment variables** for runtime settings
+- **Volume mounts** for configuration files
 
-### Prerequisites
-- Minikube
-- kubectl
-- Docker
+### Logging Strategy
+For this demo, we use:
+- **kubectl logs** for immediate log access
+- **Spring Boot Actuator** for health and metrics
+- **Prometheus** for metrics collection
 
-### Local Deployment
-
-1. **Clone and setup:**
-   ```bash
-   git clone <your-repo>
-   cd mosip-devops-setup
-   chmod +x scripts/setup.sh
-   ./scripts/setup.sh
+For production, you could add:
+- Loki stack for log aggregation
+- Elasticsearch + Kibana (ELK)
+- Cloud-native logging solutions
