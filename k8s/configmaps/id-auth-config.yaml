@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: id-auth-config
+  namespace: mosip
+data:
+  application.yml: |
+    server:
+      port: 8080
+      servlet:
+        context-path: /idauthentication
+    spring:
+      datasource:
+        url: jdbc:postgresql://postgresql.mosip.svc.cluster.local:5432/mosip_idauth
+        driver-class-name: org.postgresql.Driver
+      jpa:
+        database-platform: org.hibernate.dialect.PostgreSQLDialect
+        hibernate:
+          ddl-auto: validate
+        show-sql: false
+      redis:
+        host: redis.mosip.svc.cluster.local
+        port: 6379
+    mosip:
+      idauthentication:
+        auth-token-expiry: 300
+        uin-expiry: 30
+    logging:
+      level:
+        io.mosip.idauthentication: DEBUG
