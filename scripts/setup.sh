@@ -11,7 +11,7 @@ command -v kubectl >/dev/null 2>&1 || { echo "Kubectl required but not installed
 # Start Minikube with sufficient resources
 if ! minikube status | grep -q "Running"; then
     echo "Starting Minikube cluster..."
-    minikube start --addons=ingress --cpus=4 --memory=6500 --disk-size=20g
+    minikube start --addons=ingress --cpus=4 --memory=5500 --disk-size=20g
 else
     echo "Minikube is already running"
 fi
