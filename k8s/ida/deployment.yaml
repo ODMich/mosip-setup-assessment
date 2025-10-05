@@ -116,11 +116,11 @@ spec:
           value: "INFO"
         resources:
           requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
             memory: "512Mi"
             cpu: "200m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /idauthentication/actuator/health
