@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Running MOSIP Smoke Tests..."
+echo "🚀 Running MOSIP Smoke Tests..."
 
 MINIKUBE_IP=$(minikube ip)
 SUCCESS=0
@@ -26,19 +26,40 @@ test_endpoint() {
     fi
 }
 
-echo "Testing service endpoints..."
+echo "📋 Testing service endpoints..."
 
-# Test ID Authentication health
+# Test ID Authentication
 test_endpoint "ID Authentication Health" "http://$MINIKUBE_IP/idauthentication/actuator/health"
+test_endpoint "ID Authentication Info" "http://$MINIKUBE_IP/idauthentication/actuator/info"
 
-# Test Registration health  
+# Test Registration
 test_endpoint "Registration Health" "http://$MINIKUBE_IP/registration/actuator/health"
+test_endpoint "Registration Info" "http://$MINIKUBE_IP/registration/actuator/info"
 
-# Test Prometheus
-test_endpoint "Prometheus" "http://$MINIKUBE_IP:30900/graph"
+# Test Monitoring
+test_endpoint "Prometheus" "http://$MINIKUBE_IP:30900/graph" 200
+test_endpoint "Grafana" "http://$MINIKUBE_IP:30500" 200
+
+# Test Logging
+test_endpoint "Kibana" "http://$MINIKUBE_IP:30601" 200
+test_endpoint "Elasticsearch" "http://$MINIKUBE_IP:30601/api/status" 200
+
+# Test Prometheus metrics
+test_endpoint "IDA Metrics" "http://$MINIKUBE_IP/idauthentication/actuator/prometheus" 200
+test_endpoint "Registration Metrics" "http://$MINIKUBE_IP/registration/actuator/prometheus" 200
 
 echo ""
-echo "Test Results: $SUCCESS/$TOTAL passed"
+echo "📊 Checking pod status..."
+kubectl get pods -n mosip
+
+echo ""
+echo "📊 Checking logging stack..."
+kubectl get pods -n mosip -l app=kibana
+kubectl get pods -n mosip -l app=elasticsearch
+kubectl get pods -n mosip -l app=filebeat
+
+echo ""
+echo "📊 Test Results: $SUCCESS/$TOTAL passed"
 
 if [ $SUCCESS -eq $TOTAL ]; then
     echo "🎉 All smoke tests passed!"

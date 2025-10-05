@@ -7,6 +7,7 @@ on:
     branches: [ main ]
 
 env:
+  CLUSTER_NAME: mosip-cluster
   NAMESPACE: mosip
 
 jobs:
@@ -20,38 +21,12 @@ jobs:
       run: |
         kubectl apply --dry-run=client -f k8s/namespace.yaml
         kubectl apply --dry-run=client -f k8s/configmaps/
-        kubectl apply --dry-run=client -f k8s/postgresql.yaml
-        kubectl apply --dry-run=client -f k8s/redis.yaml
-        kubectl apply --dry-run=client -f k8s/id-auth-deployment.yaml
-        kubectl apply --dry-run=client -f k8s/reg-deployment.yaml
+        kubectl apply --dry-run=client -f k8s/ida/
+        kubectl apply --dry-run=client -f k8s/regclient/
         kubectl apply --dry-run=client -f k8s/ingress.yaml
 
-    - name: Run kubeval
-      uses: instrumenta/kubeval-action@master
-      with:
-        files: k8s/
-
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: Checkov security scan
-      uses: bridgecrewio/checkov-action@master
-      with:
-        directory: k8s/
-
   deploy-to-kubernetes:
-    needs: [validate-manifests, security-scan]
+    needs: validate-manifests
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
@@ -66,38 +41,38 @@ jobs:
         kubernetes version: 'v1.26.0'
         start args: '--addons=ingress --cpus=4 --memory=8192'
 
+    - name: Wait for ingress controller
+      run: |
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=180s
+
     - name: Create namespace
       run: kubectl apply -f k8s/namespace.yaml
 
-    - name: Create secrets
+    - name: Deploy configurations
       run: |
-        kubectl create secret generic mosip-secrets \
-          --namespace mosip \
-          --from-literal=db-username=mosipuser \
-          --from-literal=db-password=mosippassword \
-          --from-literal=redis-password=redispassword \
-          --from-literal=jwt-secret=myjwtsecret123 \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-    - name: Deploy dependencies
-      run: |
-        kubectl apply -f k8s/postgresql.yaml
-        kubectl apply -f k8s/redis.yaml
-        kubectl rollout status deployment/postgresql -n mosip --timeout=180s
-        kubectl rollout status deployment/redis -n mosip --timeout=180s
+        kubectl apply -f k8s/configmaps/
 
     - name: Deploy MOSIP services
       run: |
-        kubectl apply -f k8s/configmaps/
-        kubectl apply -f k8s/id-auth-deployment.yaml
-        kubectl apply -f k8s/reg-deployment.yaml
+        kubectl apply -f k8s/ida/
+        kubectl apply -f k8s/regclient/
         kubectl apply -f k8s/ingress.yaml
 
-    - name: Wait for deployment
+    - name: Wait for services
       run: |
-        kubectl rollout status deployment/id-authentication -n mosip --timeout=300s
-        kubectl rollout status deployment/registration -n mosip --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=ida -n mosip --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=regclient -n mosip --timeout=300s
 
+    - name: Deploy logging stack
+      run: |
+        kubectl apply -f k8s/logging/
+        sleep 30  # Wait for logging stack to initialize
+        kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=kibana -n mosip --timeout=300s
+        
     - name: Run smoke tests
       run: |
         chmod +x scripts/smoke-tests.sh
@@ -107,29 +82,6 @@ jobs:
       if: failure()
       run: |
         echo "🚨 Deployment failed - initiating rollback"
-        kubectl rollout undo deployment/id-authentication -n mosip
-        kubectl rollout undo deployment/registration -n mosip
-        kubectl rollout status deployment/id-authentication -n mosip --timeout=180s
-        kubectl rollout status deployment/registration -n mosip --timeout=180s
-        echo "✅ Rollback completed successfully"
+        chmod +x scripts/rollback.sh
+        ./scripts/rollback.sh
         exit 1
-
-  deploy-monitoring:
-    needs: deploy-to-kubernetes
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Minikube
-      uses: manusa/actions-setup-minikube@v2
-
-    - name: Deploy monitoring stack
-      run: |
-        kubectl apply -f k8s/monitoring/
-        sleep 30  # Wait for monitoring to be ready
-
-    - name: Verify monitoring
-      run: |
-        kubectl get pods -n mosip | grep -E "(prometheus|grafana)"

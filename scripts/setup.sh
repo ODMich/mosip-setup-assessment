@@ -2,78 +2,79 @@
 
 set -e
 
-echo "Setting up MOSIP DevOps Environment..."
+echo "🚀 Setting up MOSIP DevOps Environment..."
 
 # Check prerequisites
 command -v minikube >/dev/null 2>&1 || { echo "Minikube required but not installed. Aborting."; exit 1; }
 command -v kubectl >/dev/null 2>&1 || { echo "Kubectl required but not installed. Aborting."; exit 1; }
 
-# Start Minikube with sufficient resources
+# Start Minikube
 if ! minikube status | grep -q "Running"; then
     echo "Starting Minikube cluster..."
-    minikube start --addons=ingress --cpus=4 --memory=5000 --disk-size=8g
+    minikube start --addons=ingress --cpus=4 --memory=8192  # Increased memory for ELK stack
 else
     echo "Minikube is already running"
+    minikube addons enable ingress
 fi
 
-# Enable ingress if not already enabled
-minikube addons enable ingress
-
-echo "⏳ Waiting for NGINX Ingress Controller to be ready..."
+# Wait for ingress controller
+echo "⏳ Waiting for NGINX Ingress Controller..."
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
   --timeout=120s
 
-echo "Creating MOSIP namespace..."
+echo "📦 Creating MOSIP namespace..."
 kubectl apply -f k8s/namespace.yaml
 
-echo "Creating secrets..."
-kubectl create secret generic mosip-secrets \
-  --namespace mosip \
-  --from-literal=db-username=mosipuser \
-  --from-literal=db-password=mosippassword \
-  --from-literal=redis-password=redispassword \
-  --from-literal=jwt-secret=myjwtsecret123 \
-  --from-literal=grafana-password=admin123 \
-  --dry-run=client -o yaml | kubectl apply -f -
+echo "📊 Deploying centralized logging stack (ELK)..."
+kubectl apply -f k8s/logging/
 
-echo "Deploying dependencies..."
-kubectl apply -f k8s/postgresql.yaml
-kubectl apply -f k8s/redis.yaml
+echo "⏳ Waiting for Elasticsearch to be ready..."
+kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
 
-echo "Waiting for dependencies to be ready..."
-kubectl wait --for=condition=ready pod -l app=postgresql -n mosip --timeout=180s
-kubectl wait --for=condition=ready pod -l app=redis -n mosip --timeout=180s
+echo "⏳ Waiting for Kibana to be ready..."
+kubectl wait --for=condition=ready pod -l app=kibana -n mosip --timeout=300s
 
-echo "Deploying configuration..."
-kubectl apply -f k8s/configmaps/
+echo "🚀 Deploying MOSIP modules (this will install modules directly on pods)..."
+echo "📝 Note: Modules are installed during pod initialization using initContainers"
 
-echo "Deploying MOSIP services..."
-kubectl apply -f k8s/id-auth-deployment.yaml
-kubectl apply -f k8s/reg-deployment.yaml
+# Deploy the services - installation happens in initContainers
+kubectl apply -f k8s/ida/
+kubectl apply -f k8s/regclient/
 kubectl apply -f k8s/ingress.yaml
 
-echo "Deploying monitoring stack..."
+echo "📈 Deploying monitoring stack..."
 kubectl apply -f k8s/monitoring/
 
-echo "Waiting for MOSIP services to be ready..."
-kubectl wait --for=condition=ready pod -l app=id-authentication -n mosip --timeout=300s
-kubectl wait --for=condition=ready pod -l app=registration -n mosip --timeout=300s
+echo "⏳ Waiting for MOSIP services to be ready..."
+echo "   This may take several minutes as modules are being installed on the pods..."
+echo "   Installation logs:"
+echo "   - kubectl logs -f deployment/ida -n mosip -c install-ida"
+echo "   - kubectl logs -f deployment/regclient -n mosip -c install-regclient"
 
-# Get Minikube IP
+# Wait for pods to be ready (this includes module installation)
+kubectl wait --for=condition=ready pod -l app=ida -n mosip --timeout=600s
+kubectl wait --for=condition=ready pod -l app=regclient -n mosip --timeout=600s
+
+echo "✅ MOSIP modules installation completed!"
+
 MINIKUBE_IP=$(minikube ip)
 echo ""
-echo "MOSIP DevOps setup completed successfully!"
+echo "🎉 MOSIP DevOps setup completed successfully!"
 echo ""
-echo "Access URLs:"
+echo "🌐 Access URLs:"
 echo "   ID Authentication: http://$MINIKUBE_IP/idauthentication"
 echo "   Registration: http://$MINIKUBE_IP/registration"
-echo "   Prometheus: http://$MINIKUBE_IP:30900"
-echo "   Grafana: http://$MINIKUBE_IP:30500"
+echo "   Monitoring:"
+echo "     - Prometheus: http://$MINIKUBE_IP:30900"
+echo "     - Grafana: http://$MINIKUBE_IP:30500"
+echo "   Logging:"
+echo "     - Kibana: http://$MINIKUBE_IP:30601"
 echo ""
-echo "Check status:"
-echo "   kubectl get all -n mosip"
+echo "🔍 Check status: kubectl get all -n mosip"
+echo "📋 View application logs: kubectl logs deployment/ida -n mosip"
+echo "📊 View centralized logs: Open Kibana at http://$MINIKUBE_IP:30601"
 echo ""
-echo "Run demo: ./scripts/demo-commands.sh"
-echo "Test resilience: ./scripts/test-resilience.sh"
+echo "🧪 Test services: ./scripts/smoke-tests.sh"
+echo "🔄 Test resilience: ./scripts/test-resilience.sh"

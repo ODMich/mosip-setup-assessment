@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regclient
+  namespace: mosip
+  labels:
+    app: regclient
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: regclient
+  template:
+    metadata:
+      labels:
+        app: regclient
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/registration/actuator/prometheus"
+        logging.capture: "true"
+        logging.format: "json"
+        logging.service: "regclient"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      initContainers:
+      - name: install-regclient
+        image: ubuntu:20.04
+        command: 
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "📥 Installing MOSIP Registration Client Module..."
+          
+          # Install prerequisites
+          apt-get update
+          apt-get install -y wget curl git openjdk-17-jdk maven
+          
+          # Clone MOSIP infra repository
+          echo "🔽 Cloning MOSIP infrastructure repository..."
+          git clone -b release-1.2.0.1-B2 https://github.com/mosip/mosip-infra /tmp/mosip-infra
+          
+          # Navigate to Registration Client deployment directory
+          cd /tmp/mosip-infra/deployment/v3/mosip/regclient
+          
+          echo "📋 Checking Registration Client deployment structure..."
+          ls -la
+          
+          # Check if install.sh exists
+          if [ -f "install.sh" ]; then
+              echo "🚀 Running Registration Client installation script..."
+              chmod +x install.sh
+              ./install.sh
+              echo "✅ MOSIP Registration Client module installation completed"
+          else
+              echo "❌ Registration Client installation script not found"
+              exit 1
+          fi
+          
+          # Copy installed application to shared volume
+          mkdir -p /app
+          cp -r /tmp/mosip-infra/deployment/v3/mosip/regclient /app/mosip-regclient
+          echo "✅ Installation completed successfully"
+        volumeMounts:
+        - name: app-data
+          mountPath: /app
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      containers:
+      - name: regclient
+        image: openjdk:17-jre-slim
+        ports:
+        - containerPort: 8081
+        command: 
+        - /bin/bash
+        - -c
+        - |
+          echo "🚀 Starting MOSIP Registration Client Service..."
+          cd /app/mosip-regclient
+          
+          # Look for the main application JAR file
+          JAR_FILE=$(find . -name "*.jar" | grep -v "sources.jar" | grep -v "javadoc.jar" | head -1)
+          
+          if [ -n "$JAR_FILE" ]; then
+              echo "🎯 Starting application: $JAR_FILE"
+              java -jar "$JAR_FILE"
+          else
+              echo "❌ No JAR file found. Installation may have failed."
+              echo "Available files:"
+              find . -type f | head -20
+              exit 1
+          fi
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "development"
+        - name: LOGGING_LEVEL_IO_MOSIP
+          value: "INFO"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /registration/actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /registration/actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /registration/actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 10
+        volumeMounts:
+        - name: app-data
+          mountPath: /app
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+      volumes:
+      - name: app-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: regclient-service
+  namespace: mosip
+  labels:
+    app: regclient
+spec:
+  selector:
+    app: regclient
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP

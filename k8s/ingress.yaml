@@ -12,13 +12,13 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: id-authentication-service
+            name: ida-service
             port:
-              number: 80
+              number: 8080
       - path: /registration
         pathType: Prefix
         backend:
           service:
-            name: registration-service
+            name: regclient-service
             port:
-              number: 80
+              number: 8081
