@@ -27,11 +27,11 @@ kubectl wait --namespace ingress-nginx \
 echo "📦 Creating MOSIP namespace..."
 kubectl apply -f k8s/namespace.yaml
 
-echo "📊 Deploying centralized logging stack (ELK)..."
-kubectl apply -f k8s/logging/
+#echo "📊 Deploying centralized logging stack (ELK)..."
+#kubectl apply -f k8s/logging/
 
-echo "⏳ Waiting for Elasticsearch to be ready..."
-kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
+#echo "⏳ Waiting for Elasticsearch to be ready..."
+#kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
 
 echo "🚀 Deploying MOSIP services..."
 kubectl apply -f k8s/ida/
@@ -55,8 +55,8 @@ echo "   Registration: http://$MINIKUBE_IP/registration"
 echo "   Monitoring:"
 echo "     - Prometheus: http://$MINIKUBE_IP:30900"
 echo "     - Grafana: http://$MINIKUBE_IP:30500"
-echo "   Logging:"
-echo "     - Kibana: http://$MINIKUBE_IP:30601"
+#echo "   Logging:"
+#echo "     - Kibana: http://$MINIKUBE_IP:30601"
 echo ""
 echo "🔍 Check status: kubectl get all -n mosip"
 echo ""
