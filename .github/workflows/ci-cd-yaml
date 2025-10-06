@@ -1,0 +1,84 @@
+name: MOSIP CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+
+env:
+  CLUSTER_NAME: mosip-cluster
+  NAMESPACE: mosip
+
+jobs:
+  validate-manifests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate Kubernetes manifests
+      run: |
+        kubectl apply --dry-run=client -f k8s/namespace.yaml
+        kubectl apply --dry-run=client -f k8s/configmaps/
+        kubectl apply --dry-run=client -f k8s/ida/
+        kubectl apply --dry-run=client -f k8s/regclient/
+        kubectl apply --dry-run=client -f k8s/ingress.yaml
+
+  deploy-to-kubernetes:
+    needs: validate-manifests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Minikube
+      uses: manusa/actions-setup-minikube@v2
+      with:
+        minikube version: 'latest'
+        kubernetes version: 'v1.26.0'
+        start args: '--addons=ingress --cpus=4 --memory=8192'
+
+    - name: Wait for ingress controller
+      run: |
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=180s
+
+    - name: Create namespace
+      run: kubectl apply -f k8s/namespace.yaml
+
+    - name: Deploy configurations
+      run: |
+        kubectl apply -f k8s/configmaps/
+
+    - name: Deploy MOSIP services
+      run: |
+        kubectl apply -f k8s/ida/
+        kubectl apply -f k8s/regclient/
+        kubectl apply -f k8s/ingress.yaml
+
+    - name: Wait for services
+      run: |
+        kubectl wait --for=condition=ready pod -l app=ida -n mosip --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=regclient -n mosip --timeout=300s
+
+    - name: Deploy logging stack
+      run: |
+        kubectl apply -f k8s/logging/
+        sleep 30  # Wait for logging stack to initialize
+        kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=kibana -n mosip --timeout=300s
+        
+    - name: Run smoke tests
+      run: |
+        chmod +x scripts/smoke-tests.sh
+        ./scripts/smoke-tests.sh
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "🚨 Deployment failed - initiating rollback"
+        chmod +x scripts/rollback.sh
+        ./scripts/rollback.sh
+        exit 1

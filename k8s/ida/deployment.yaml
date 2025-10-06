@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ida
+  namespace: mosip
+  labels:
+    app: ida
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ida
+  template:
+    metadata:
+      labels:
+        app: ida
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/idauthentication/actuator/prometheus"
+        logging.capture: "true"
+        logging.format: "json"
+        logging.service: "ida"
+    spec:
+      containers:
+      - name: ida
+        image: mosipid/authentication-service
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "development"
+        - name: LOGGING_LEVEL_IO_MOSIP
+          value: "INFO"
+        resources:
+          requests:
+            memory: "2.5Gi"
+            cpu: "250m"
+          limits:
+            memory: "3Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /idauthentication/actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /idauthentication/actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /idauthentication/actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ida-service
+  namespace: mosip
+  labels:
+    app: ida
+spec:
+  selector:
+    app: ida
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

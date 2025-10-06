@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mosip-ingress
+  namespace: mosip
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /idauthentication
+        pathType: Prefix
+        backend:
+          service:
+            name: ida-service
+            port:
+              number: 8080
+      - path: /registration
+        pathType: Prefix
+        backend:
+          service:
+            name: regclient-service
+            port:
+              number: 8081
