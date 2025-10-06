@@ -9,7 +9,6 @@ This deployment uses official MOSIP Docker images from Docker Hub:
 ### Why No Custom Dockerfiles?
 - MOSIP provides production-ready, secure containers
 - Regular security updates and patches
-- Standardized Spring Boot containerization
 - No need for custom builds or maintenance
 
 ### Configuration Management

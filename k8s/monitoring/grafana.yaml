@@ -27,10 +27,10 @@ spec:
         resources:
           requests:
             memory: "1Gi"
-            cpu: "100m"
+            cpu: "250m"
           limits:
             memory: "1.5Gi"
-            cpu: "150m"
+            cpu: "500m"
         volumeMounts:
         - name: grafana-storage
           mountPath: /var/lib/grafana
