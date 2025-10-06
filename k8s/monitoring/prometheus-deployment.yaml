@@ -28,10 +28,10 @@ spec:
         resources:
           requests:
             memory: "500Mi"
-            cpu: "50m"
+            cpu: "100m"
           limits:
             memory: "1Gi"
-            cpu: "100m"
+            cpu: "150m"
       volumes:
       - name: prometheus-config-volume
         configMap:
