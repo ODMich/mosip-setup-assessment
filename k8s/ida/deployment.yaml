@@ -22,93 +22,16 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
-        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/path: "/idauthentication/actuator/prometheus"
         logging.capture: "true"
         logging.format: "json"
         logging.service: "ida"
     spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-      initContainers:
-      - name: install-ida
-        image: ubuntu:20.04
-        command: 
-        - /bin/bash
-        - -c
-        - |
-          set -e
-          echo "📥 Installing MOSIP ID Authentication Module..."
-          
-          # Install prerequisites
-          apt-get update
-          apt-get install -y wget curl git openjdk-17-jdk maven
-          
-          # Clone MOSIP infra repository
-          echo "🔽 Cloning MOSIP infrastructure repository..."
-          git clone -b release-1.2.0.1-B2 https://github.com/mosip/mosip-infra /tmp/mosip-infra
-          
-          # Navigate to IDA deployment directory
-          cd /tmp/mosip-infra/deployment/v3/mosip/ida
-          
-          echo "📋 Checking IDA deployment structure..."
-          ls -la
-          
-          # Check if install.sh exists
-          if [ -f "install.sh" ]; then
-              echo "🚀 Running IDA installation script in NON-INTERACTIVE mode..."
-              chmod +x install.sh
-              
-              # Run installation with automated responses for development environment
-              echo "🤖 Selecting 'n' for development environment (no SSL)..."
-              printf "n\\ny\\n" | ./install.sh
-              
-              echo "✅ MOSIP ID Authentication module installation completed"
-          else
-              echo "❌ IDA installation script not found"
-              exit 1
-          fi
-          
-          # Copy installed application to shared volume
-          mkdir -p /app
-          echo "📦 Copying installed application..."
-          cp -r /tmp/mosip-infra/deployment/v3/mosip/ida /app/mosip-ida
-          
-          echo "✅ Installation completed successfully"
-        volumeMounts:
-        - name: app-data
-          mountPath: /app
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "50m"
-          limits:
-            memory: "128Mi"
-            cpu: "100m"
       containers:
       - name: ida
-        image: openjdk:17-jre-slim
+        image: mosip-ida:1.2.0.1
         ports:
         - containerPort: 8080
-        command: 
-        - /bin/bash
-        - -c
-        - |
-          echo "🚀 Starting MOSIP ID Authentication Service..."
-          cd /app/mosip-ida
-          
-          # Look for the main application JAR file
-          JAR_FILE=$(find . -name "*.jar" | grep -v "sources.jar" | grep -v "javadoc.jar" | head -1)
-          
-          if [ -n "$JAR_FILE" ]; then
-              echo "🎯 Starting application: $JAR_FILE"
-              java -jar "$JAR_FILE"
-          else
-              echo "❌ No JAR file found. Installation may have failed."
-              echo "Available files:"
-              find . -type f | head -20
-              exit 1
-          fi
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "development"
@@ -116,11 +39,11 @@ spec:
           value: "INFO"
         resources:
           requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
             memory: "128Mi"
             cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "200m"
         livenessProbe:
           httpGet:
             path: /idauthentication/actuator/health
@@ -143,16 +66,10 @@ spec:
           initialDelaySeconds: 30
           periodSeconds: 15
           failureThreshold: 10
-        volumeMounts:
-        - name: app-data
-          mountPath: /app
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
           runAsUser: 1000
-      volumes:
-      - name: app-data
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

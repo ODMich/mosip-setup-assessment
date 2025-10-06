@@ -7,15 +7,25 @@ echo "🚀 Setting up MOSIP DevOps Environment..."
 # Check prerequisites
 command -v minikube >/dev/null 2>&1 || { echo "Minikube required but not installed. Aborting."; exit 1; }
 command -v kubectl >/dev/null 2>&1 || { echo "Kubectl required but not installed. Aborting."; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "Docker required but not installed. Aborting."; exit 1; }
 
 # Start Minikube
 if ! minikube status | grep -q "Running"; then
     echo "Starting Minikube cluster..."
-    minikube start --addons=ingress --cpus=4 --memory=6500 --disk-size=4gb # Increased memory for ELK stack
+    minikube start --addons=ingress --cpus=4 --memory=8192
 else
     echo "Minikube is already running"
     minikube addons enable ingress
 fi
+
+# Set up Docker to use Minikube's Docker daemon
+echo "🔧 Setting up Docker environment..."
+eval $(minikube docker-env)
+
+# Build Docker images
+echo "🔨 Building MOSIP Docker images..."
+chmod +x scripts/build-images.sh
+./scripts/build-images.sh
 
 # Wait for ingress controller
 echo "⏳ Waiting for NGINX Ingress Controller..."
@@ -33,13 +43,7 @@ kubectl apply -f k8s/logging/
 echo "⏳ Waiting for Elasticsearch to be ready..."
 kubectl wait --for=condition=ready pod -l app=elasticsearch -n mosip --timeout=300s
 
-echo "⏳ Waiting for Kibana to be ready..."
-kubectl wait --for=condition=ready pod -l app=kibana -n mosip --timeout=300s
-
-echo "🚀 Deploying MOSIP modules (this will install modules directly on pods)..."
-echo "📝 Note: Modules are installed during pod initialization using initContainers"
-
-# Deploy the services - installation happens in initContainers
+echo "🚀 Deploying MOSIP services..."
 kubectl apply -f k8s/ida/
 kubectl apply -f k8s/regclient/
 kubectl apply -f k8s/ingress.yaml
@@ -48,16 +52,8 @@ echo "📈 Deploying monitoring stack..."
 kubectl apply -f k8s/monitoring/
 
 echo "⏳ Waiting for MOSIP services to be ready..."
-echo "   This may take several minutes as modules are being installed on the pods..."
-echo "   Installation logs:"
-echo "   - kubectl logs -f deployment/ida -n mosip -c install-ida"
-echo "   - kubectl logs -f deployment/regclient -n mosip -c install-regclient"
-
-# Wait for pods to be ready (this includes module installation)
-kubectl wait --for=condition=ready pod -l app=ida -n mosip --timeout=600s
-kubectl wait --for=condition=ready pod -l app=regclient -n mosip --timeout=600s
-
-echo "✅ MOSIP modules installation completed!"
+kubectl wait --for=condition=ready pod -l app=ida -n mosip --timeout=300s
+kubectl wait --for=condition=ready pod -l app=regclient -n mosip --timeout=300s
 
 MINIKUBE_IP=$(minikube ip)
 echo ""
@@ -73,8 +69,6 @@ echo "   Logging:"
 echo "     - Kibana: http://$MINIKUBE_IP:30601"
 echo ""
 echo "🔍 Check status: kubectl get all -n mosip"
-echo "📋 View application logs: kubectl logs deployment/ida -n mosip"
-echo "📊 View centralized logs: Open Kibana at http://$MINIKUBE_IP:30601"
 echo ""
 echo "🧪 Test services: ./scripts/smoke-tests.sh"
 echo "🔄 Test resilience: ./scripts/test-resilience.sh"
