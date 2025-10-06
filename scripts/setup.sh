@@ -7,7 +7,6 @@ echo "🚀 Setting up MOSIP DevOps Environment..."
 # Check prerequisites
 command -v minikube >/dev/null 2>&1 || { echo "Minikube required but not installed. Aborting."; exit 1; }
 command -v kubectl >/dev/null 2>&1 || { echo "Kubectl required but not installed. Aborting."; exit 1; }
-command -v docker >/dev/null 2>&1 || { echo "Docker required but not installed. Aborting."; exit 1; }
 
 # Start Minikube
 if ! minikube status | grep -q "Running"; then
@@ -17,15 +16,6 @@ else
     echo "Minikube is already running"
     minikube addons enable ingress
 fi
-
-# Set up Docker to use Minikube's Docker daemon
-echo "🔧 Setting up Docker environment..."
-eval $(minikube docker-env)
-
-# Build Docker images
-echo "🔨 Building MOSIP Docker images..."
-chmod +x scripts/build-images.sh
-./scripts/build-images.sh
 
 # Wait for ingress controller
 echo "⏳ Waiting for NGINX Ingress Controller..."

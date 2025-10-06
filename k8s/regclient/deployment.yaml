@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
       - name: regclient
-        image: mosip-regclient:1.2.0.1
+        image: mosipid/registration-client
         ports:
         - containerPort: 8081
         env:

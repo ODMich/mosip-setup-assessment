@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
       - name: ida
-        image: mosip-ida:1.2.0.1
+        image: mosipid/authentication-service
         ports:
         - containerPort: 8080
         env:
