@@ -59,7 +59,7 @@ spec:
               fieldPath: spec.nodeName
         resources:
           requests:
-            memory: "100Mi"
+            memory: "64Mi"
             cpu: "50m"
           limits:
             memory: "100Mi"
